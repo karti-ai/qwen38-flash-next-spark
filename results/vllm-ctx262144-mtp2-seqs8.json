@@ -1,0 +1,40 @@
+{
+  "base_url": "http://localhost:8000/v1",
+  "model": "qwen3.8-flash-next",
+  "max_tokens": 256,
+  "results": [
+    {
+      "concurrency": 1,
+      "streams_ok": 1,
+      "errors": [],
+      "wall_seconds": 9.19,
+      "total_tokens": 107,
+      "aggregate_tok_s": 11.64,
+      "per_stream_tok_s": 11.64,
+      "ttft_p50": 0.232,
+      "queue_time_delta_s": 0.0
+    },
+    {
+      "concurrency": 4,
+      "streams_ok": 4,
+      "errors": [],
+      "wall_seconds": 14.49,
+      "total_tokens": 460,
+      "aggregate_tok_s": 31.76,
+      "per_stream_tok_s": 8.25,
+      "ttft_p50": 0.934,
+      "queue_time_delta_s": 0.0
+    },
+    {
+      "concurrency": 8,
+      "streams_ok": 8,
+      "errors": [],
+      "wall_seconds": 15.13,
+      "total_tokens": 874,
+      "aggregate_tok_s": 57.76,
+      "per_stream_tok_s": 7.29,
+      "ttft_p50": 0.501,
+      "queue_time_delta_s": 0.0
+    }
+  ]
+}

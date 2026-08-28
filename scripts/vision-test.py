@@ -134,6 +134,13 @@ def ask(base_url: str, model: str, img: Image.Image, prompt: str, max_tokens: in
             ],
             "max_tokens": max_tokens,
             "temperature": 0.0,
+            # Thinking is ON by default and will consume a small budget whole,
+            # leaving content=null and finish_reason="length" with no error.
+            # Measured on this model: max_tokens=64 on the shapes case returned
+            # an empty string while the reasoning block held the real answer.
+            # A vision test that does not disable this reports FAIL for a model
+            # that can see perfectly well.
+            "chat_template_kwargs": {"enable_thinking": False},
         }
     ).encode()
     req = urllib.request.Request(
@@ -141,9 +148,15 @@ def ask(base_url: str, model: str, img: Image.Image, prompt: str, max_tokens: in
         data=body,
         headers={"Content-Type": "application/json", "Authorization": "Bearer none"},
     )
-    with urllib.request.urlopen(req, timeout=600) as resp:
+    with urllib.request.urlopen(req, timeout=900) as resp:
         out = json.load(resp)
-    return (out["choices"][0]["message"].get("content") or "").strip()
+    choice = out["choices"][0]
+    content = choice["message"].get("content")
+    if not content:
+        # Never return a bare empty string: an empty answer and a wrong answer
+        # are different failures and must not look alike in the output.
+        return f"<NULL_CONTENT finish_reason={choice.get('finish_reason')}>"
+    return content.strip()
 
 
 CASES = [

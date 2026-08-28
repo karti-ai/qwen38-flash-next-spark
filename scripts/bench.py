@@ -92,14 +92,22 @@ class Result:
         self.error: str | None = None
 
 
-def one_stream(base_url: str, model: str, max_tokens: int, out: Result) -> None:
+def one_stream(base_url: str, model: str, max_tokens: int, out: Result, think: bool = False) -> None:
     body = {
         "model": model,
         "messages": [{"role": "user", "content": PROMPT}],
         "max_tokens": max_tokens,
         "temperature": 0.0,
         "stream": True,
+        # Thinking OFF by default. With it on, the chain of thought streams as
+        # `delta.reasoning`, NOT `delta.content` — a harness that counts only
+        # content chunks measures ZERO tokens per second on a model that is in
+        # fact generating at full speed. We hit exactly that; see docs/BENCHMARKS.md.
+        # Set --thinking to measure the reasoning path instead.
+        "chat_template_kwargs": {"enable_thinking": False},
     }
+    if think:
+        body.pop("chat_template_kwargs")
     start = time.perf_counter()
     first = None
     n = 0
@@ -122,7 +130,9 @@ def one_stream(base_url: str, model: str, max_tokens: int, out: Result) -> None:
                 except json.JSONDecodeError:
                     continue
                 delta = (chunk.get("choices") or [{}])[0].get("delta", {})
-                if delta.get("content"):
+                # Count reasoning chunks too: they are real generated tokens and
+                # excluding them understates throughput by 100% when thinking is on.
+                if delta.get("content") or delta.get("reasoning") or delta.get("reasoning_content"):
                     if first is None:
                         first = time.perf_counter()
                     n += 1
@@ -134,13 +144,13 @@ def one_stream(base_url: str, model: str, max_tokens: int, out: Result) -> None:
     out.tokens = n
 
 
-def sweep(base_url: str, model: str, level: int, max_tokens: int) -> dict:
+def sweep(base_url: str, model: str, level: int, max_tokens: int, think: bool = False) -> dict:
     before = metrics_text(base_url)
     q0 = counter(before, "vllm:request_queue_time_seconds_sum", "sglang:queue_time_seconds_sum")
 
     results = [Result() for _ in range(level)]
     threads = [
-        threading.Thread(target=one_stream, args=(base_url, model, max_tokens, r))
+        threading.Thread(target=one_stream, args=(base_url, model, max_tokens, r, think))
         for r in results
     ]
     t0 = time.perf_counter()
@@ -180,6 +190,8 @@ def main() -> int:
     ap.add_argument("--model", default="qwen3.8-flash-next")
     ap.add_argument("--concurrency", default="1,8,16,32,48")
     ap.add_argument("--max-tokens", type=int, default=256)
+    ap.add_argument("--thinking", action="store_true",
+                    help="leave the reasoning block enabled (default: disabled)")
     ap.add_argument("--out", help="write JSON results here")
     args = ap.parse_args()
 
@@ -196,7 +208,7 @@ def main() -> int:
     print("-" * 52)
     rows = []
     for level in levels:
-        row = sweep(args.base_url, args.model, level, args.max_tokens)
+        row = sweep(args.base_url, args.model, level, args.max_tokens, args.thinking)
         rows.append(row)
         q = row["queue_time_delta_s"]
         qs = "n/a" if q is None else f"{q:.2f}"
@@ -206,6 +218,13 @@ def main() -> int:
         )
         if row["errors"]:
             print(f"      !! {row['streams_ok']}/{level} streams ok: {row['errors'][0]}")
+
+    if rows and all(r["total_tokens"] == 0 for r in rows):
+        print(
+            "\n!! every stream produced ZERO tokens. That is a harness fault, not a\n"
+            "   result: check whether the model is streaming its output as\n"
+            "   `delta.reasoning` instead of `delta.content`."
+        )
 
     flat = [r for r in rows if r["queue_time_delta_s"] and r["queue_time_delta_s"] > 1.0]
     if flat:
