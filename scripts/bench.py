@@ -106,7 +106,9 @@ class Result:
         self.error: str | None = None
 
 
-def one_stream(base_url: str, model: str, max_tokens: int, out: Result, think: bool = False) -> None:
+def one_stream(
+    base_url: str, model: str, max_tokens: int, out: Result, think: bool = False
+) -> None:
     body = {
         "model": model,
         "messages": [{"role": "user", "content": PROMPT}],
@@ -234,7 +236,11 @@ def main() -> int:
         sys.exit(f"!! cannot reach {args.base_url}: {exc}")
     print(f"serving: {', '.join(ids)}\n")
 
-    print(f"{'c':>4}  {'agg tok/s':>10}  {'per-stream':>10}  {'ttft p50':>9}  {'queue Δs':>9}  {'tok/chunk':>9}")
+    header = (
+        f"{'c':>4}  {'agg tok/s':>10}  {'per-stream':>10}  "
+        f"{'ttft p50':>9}  {'queue Δs':>9}  {'tok/chunk':>9}"
+    )
+    print(header)
     print("-" * 64)
     rows = []
     for level in levels:
