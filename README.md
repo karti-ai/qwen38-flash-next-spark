@@ -4,7 +4,7 @@
 
 A ~180B-parameter model on one 128 GB box, with a real KV cache, native vision, and 262k of context. Two serving paths (vLLM and SGLang), verified weights, and every trap we hit written down.
 
-> **Status: bring-up.** The vLLM path is building and booting on our Spark now. Every number in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) is currently upstream's, clearly labelled as such. **Our own measurements replace them as they land** — including the one thing nobody upstream has tested: whether **vision works** on the single-Spark path.
+> **Status: it runs, and vision works.** Verified on a DGX Spark: 79.42 GiB resident, all canaries pass, and the vision tower survives the mmap path — **the first documented multimodal inference of this model on a single GB10**. Measured throughput is **11.2 tok/s single-stream, 58.5 tok/s at c=8**, and two obvious optimisations turned out to do nothing. Numbers, method and the refuted hypotheses are in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md); raw JSON in [`results/`](results/).
 
 ---
 

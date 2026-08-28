@@ -6,12 +6,65 @@
 
 ## Our measurements
 
-**None yet.** Bring-up is in progress. This section will carry:
+One DGX Spark (GB10, 121.7 GiB), `RadixArk/Qwen3.8-Flash-Next-NVFP4`, vLLM +
+PLE mmap, `--max-num-seqs 8`, MTP=2, ctx 32768, temperature 0, thinking off,
+nothing else on the box. Page cache dropped between configs. Canaries passed on
+all three, so these are comparable. Raw JSON in [`../results/`](../results/).
 
-- single-stream decode, MTP on and off
-- the concurrency sweep (c=1,8,16,32,48) with queue-time deltas
-- the vision verdict (see [VISION.md](VISION.md))
-- a same-box comparison against Qwen3.8-27B on identical prompts
+| config | c=1 | c=4 | c=8 | buff/cache | swap | majflt |
+|---|---:|---:|---:|---:|---:|---:|
+| `gpu085-mtp2-nopin` | 10.99 | 29.26 | 58.03 | 10 GB | 678 MB | 117,970 |
+| `gpu085-mtp2-pin` | 11.13 | 29.47 | 58.54 | 11 GB | 677 MB | 112,135 |
+| `gpu072-mtp2-pin` | 11.17 | 29.46 | 58.06 | 26 GB | 678 MB | 114,751 |
+
+Boot: **962 s / 922 s / 982 s** cold — about 16 minutes, not the ~8 often quoted.
+Resident: **79.42 GiB**. KV at ctx 262144 / gpu-mem 0.85: **770,140 tokens**.
+MTP acceptance: **62%** (4490 accepted of 7220 drafted).
+
+### Two hypotheses we tested and refuted
+
+**CPU pinning to the performance cluster does essentially nothing.** GB10 is
+big.LITTLE — cpu0-4/10-14 are Cortex-A725 at 2.81 GHz, cpu5-9/15-19 are
+Cortex-X925 at 3.90 GHz — and the PLE gather is host-side CPU work on the token
+path, so this looked like free throughput. It is +1.3% at c=1, inside noise. The
+gather is not clock-bound, which matches the upstream observation that the
+offload worker never exceeds ~24% of one core. We keep the pin as a default
+because it is free and removes a variable, not because it is fast.
+
+**Page cache headroom does nothing either, and this one surprised us.** The
+n-gram table pages from NVMe, so more free RAM should mean fewer faults. Going
+from `--gpu-memory-utilization` 0.85 to 0.72 grew buff/cache **2.6x**, 10 GB to
+26 GB — and bought **+0.4%**. Major faults did not fall. Swap did not move.
+
+The likely reason: the table is 47.7 GiB over 320,001,536 rows and the access
+pattern is effectively random, so no hot set forms. 26 GB of cache is no more
+useful than 10 GB when neither can hold the working set. That also explains the
+flat fault count across a 2.6x cache change.
+
+So the bottleneck is the per-token cost of the gather and the host-device sync,
+**not** the memory it pages through. The remaining untested lever that changes
+that structurally is `VLLM_PLE_CPU_OFFLOAD`.
+
+### Vision
+
+Verified working — see [VISION.md](VISION.md). Shapes and chart-reading pass;
+OCR reads 14 of 15 characters with a deterministic single-glyph substitution
+whose position moves with render size.
+
+### Same-box comparison against Qwen3.8-27B
+
+| | Qwen3.8-27B (NVFP4, SGLang DSpark) | Flash-Next (NVFP4, vLLM + mmap) |
+|---|---:|---:|
+| single-stream | 51.5 tok/s (code/tool-calls) | 11.2 |
+| aggregate | 123.9 @ c=8 | 58.5 @ c=8 |
+| resident | 56 GB | 79.4 GB |
+| box | leaves room for ASR + TTS | owns it |
+
+The 27B figures are from a matched harness on the same box class, not from this
+run; a fully matched pass is still to do. On measured latency the dense 27B is
+the better daily driver by a wide margin, despite Flash-Next winning every
+vendor-reported quality benchmark. Flash-Next's case is batch throughput and
+benchmark quality, not interactive speed.
 
 ## Upstream measurements (not ours)
 
