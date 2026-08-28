@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """Measure decode throughput at a sweep of concurrency levels.
 
+COUNT TOKENS, NOT CHUNKS
+------------------------
+With speculative decoding a server emits several accepted tokens in a SINGLE SSE
+chunk. A harness that counts chunks therefore undercounts throughput by roughly
+the acceptance length. We shipped that bug and it cost us a 3.08x error: a server
+genuinely producing 25.4 tok/s was reported as 8.2.
+
+This harness now requests `stream_options.include_usage` and reports
+`usage.completion_tokens`, which is authoritative. It also prints tokens-per-chunk
+so the ratio is visible: on a speculative server that number is the acceptance
+length, and a value near 1.0 means usage was missing and you are looking at an
+undercount.
+
 WHY NOT JUST tok/s
 ------------------
 On this model the single most expensive mistake is reporting a throughput
@@ -83,10 +96,11 @@ def counter(text: str, *names: str) -> float | None:
 
 
 class Result:
-    __slots__ = ("tokens", "ttft", "elapsed", "error")
+    __slots__ = ("tokens", "chunks", "ttft", "elapsed", "error")
 
     def __init__(self) -> None:
-        self.tokens = 0
+        self.tokens = 0      # authoritative, from usage.completion_tokens
+        self.chunks = 0      # SSE chunks; only kept to expose the ratio
         self.ttft = 0.0
         self.elapsed = 0.0
         self.error: str | None = None
@@ -99,6 +113,11 @@ def one_stream(base_url: str, model: str, max_tokens: int, out: Result, think: b
         "max_tokens": max_tokens,
         "temperature": 0.0,
         "stream": True,
+        # REQUIRED FOR CORRECTNESS, not for reporting. See the header: with
+        # speculative decoding a server emits several accepted tokens in ONE SSE
+        # chunk, so counting chunks undercounts throughput by the acceptance
+        # length. usage.completion_tokens is the authoritative token count.
+        "stream_options": {"include_usage": True},
         # Thinking OFF by default. With it on, the chain of thought streams as
         # `delta.reasoning`, NOT `delta.content` — a harness that counts only
         # content chunks measures ZERO tokens per second on a model that is in
@@ -111,6 +130,7 @@ def one_stream(base_url: str, model: str, max_tokens: int, out: Result, think: b
     start = time.perf_counter()
     first = None
     n = 0
+    usage_tokens = None
     try:
         req = urllib.request.Request(
             base_url.rstrip("/") + "/chat/completions",
@@ -129,9 +149,11 @@ def one_stream(base_url: str, model: str, max_tokens: int, out: Result, think: b
                     chunk = json.loads(payload)
                 except json.JSONDecodeError:
                     continue
-                delta = (chunk.get("choices") or [{}])[0].get("delta", {})
-                # Count reasoning chunks too: they are real generated tokens and
-                # excluding them understates throughput by 100% when thinking is on.
+                # The final chunk carries usage; that is the real token count.
+                if chunk.get("usage"):
+                    usage_tokens = chunk["usage"].get("completion_tokens") or usage_tokens
+                choices = chunk.get("choices") or []
+                delta = choices[0].get("delta", {}) if choices else {}
                 if delta.get("content") or delta.get("reasoning") or delta.get("reasoning_content"):
                     if first is None:
                         first = time.perf_counter()
@@ -141,7 +163,10 @@ def one_stream(base_url: str, model: str, max_tokens: int, out: Result, think: b
 
     out.elapsed = time.perf_counter() - start
     out.ttft = (first - start) if first else 0.0
-    out.tokens = n
+    out.chunks = n
+    # Fall back to the chunk count only if the server did not return usage, and
+    # say so in the output rather than silently reporting an undercount.
+    out.tokens = usage_tokens if usage_tokens is not None else n
 
 
 def sweep(base_url: str, model: str, level: int, max_tokens: int, think: bool = False) -> dict:
@@ -166,6 +191,7 @@ def sweep(base_url: str, model: str, level: int, max_tokens: int, think: bool = 
     errs = [r.error for r in results if r.error]
     good = [r for r in results if not r.error and r.tokens > 0]
     total = sum(r.tokens for r in good)
+    total_chunks = sum(r.chunks for r in good)
 
     return {
         "concurrency": level,
@@ -180,6 +206,10 @@ def sweep(base_url: str, model: str, level: int, max_tokens: int, think: bool = 
         if good
         else 0.0,
         "ttft_p50": round(statistics.median(r.ttft for r in good), 3) if good else 0.0,
+        # tokens-per-chunk ~= speculative acceptance length. A value near 1.0 on a
+        # server with speculation enabled means usage was missing and these numbers
+        # are chunk counts, i.e. an undercount.
+        "tokens_per_chunk": round(total / total_chunks, 2) if total_chunks else None,
         "queue_time_delta_s": round(q1 - q0, 3) if (q0 is not None and q1 is not None) else None,
     }
 
@@ -204,17 +234,19 @@ def main() -> int:
         sys.exit(f"!! cannot reach {args.base_url}: {exc}")
     print(f"serving: {', '.join(ids)}\n")
 
-    print(f"{'c':>4}  {'agg tok/s':>10}  {'per-stream':>10}  {'ttft p50':>9}  {'queue Δs':>9}")
-    print("-" * 52)
+    print(f"{'c':>4}  {'agg tok/s':>10}  {'per-stream':>10}  {'ttft p50':>9}  {'queue Δs':>9}  {'tok/chunk':>9}")
+    print("-" * 64)
     rows = []
     for level in levels:
         row = sweep(args.base_url, args.model, level, args.max_tokens, args.thinking)
         rows.append(row)
         q = row["queue_time_delta_s"]
         qs = "n/a" if q is None else f"{q:.2f}"
+        tpc = row.get("tokens_per_chunk")
         print(
             f"{row['concurrency']:>4}  {row['aggregate_tok_s']:>10}  "
-            f"{row['per_stream_tok_s']:>10}  {row['ttft_p50']:>9}  {qs:>9}"
+            f"{row['per_stream_tok_s']:>10}  {row['ttft_p50']:>9}  {qs:>9}  "
+            f"{'n/a' if tpc is None else tpc:>9}"
         )
         if row["errors"]:
             print(f"      !! {row['streams_ok']}/{level} streams ok: {row['errors'][0]}")

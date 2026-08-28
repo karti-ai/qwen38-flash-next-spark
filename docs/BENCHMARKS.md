@@ -11,11 +11,32 @@ PLE mmap, `--max-num-seqs 8`, MTP=2, ctx 32768, temperature 0, thinking off,
 nothing else on the box. Page cache dropped between configs. Canaries passed on
 all three, so these are comparable. Raw JSON in [`../results/`](../results/).
 
+> ### ⚠️ THE NUMBERS IN THIS TABLE ARE UNDERCOUNTS. Re-measurement pending.
+>
+> They were produced by a version of `bench.py` that counted **SSE chunks**, not
+> tokens. With speculative decoding a server emits several accepted tokens in a
+> single chunk, so chunk-counting undercounts throughput by roughly the
+> acceptance length.
+>
+> We caught this on a different model, where the error was measured at **3.08x**
+> — a server genuinely producing 25.4 tok/s was being reported as 8.2. Flash-Next
+> ran with MTP=2 at 62% acceptance, so its true figures are meaningfully higher
+> than what is printed below, but we will not publish a multiplied estimate as if
+> it were a measurement. The table stays as recorded, marked, until the model is
+> re-measured with the fixed harness.
+>
+> `bench.py` now requests `stream_options.include_usage` and reports
+> `usage.completion_tokens`, and prints tokens-per-chunk so the ratio is visible.
+
 | config | c=1 | c=4 | c=8 | buff/cache | swap | majflt |
 |---|---:|---:|---:|---:|---:|---:|
-| `gpu085-mtp2-nopin` | 10.99 | 29.26 | 58.03 | 10 GB | 678 MB | 117,970 |
-| `gpu085-mtp2-pin` | 11.13 | 29.47 | 58.54 | 11 GB | 677 MB | 112,135 |
-| `gpu072-mtp2-pin` | 11.17 | 29.46 | 58.06 | 26 GB | 678 MB | 114,751 |
+| `gpu085-mtp2-nopin` | 10.99* | 29.26* | 58.03* | 10 GB | 678 MB | 117,970 |
+| `gpu085-mtp2-pin` | 11.13* | 29.47* | 58.54* | 11 GB | 677 MB | 112,135 |
+| `gpu072-mtp2-pin` | 11.17* | 29.46* | 58.06* | 26 GB | 678 MB | 114,751 |
+
+`*` chunk-counted, undercounted by roughly the acceptance length. The *relative*
+comparison between the three rows is unaffected — all three were measured the
+same way — so the two refuted hypotheses below still stand.
 
 Boot: **962 s / 922 s / 982 s** cold — about 16 minutes, not the ~8 often quoted.
 Resident: **79.42 GiB**. KV at ctx 262144 / gpu-mem 0.85: **770,140 tokens**.
@@ -53,18 +74,41 @@ whose position moves with render size.
 
 ### Same-box comparison against Qwen3.8-27B
 
-| | Qwen3.8-27B (NVFP4, SGLang DSpark) | Flash-Next (NVFP4, vLLM + mmap) |
-|---|---:|---:|
-| single-stream | 51.5 tok/s (code/tool-calls) | 11.2 |
-| aggregate | 123.9 @ c=8 | 58.5 @ c=8 |
-| resident | 56 GB | 79.4 GB |
-| box | leaves room for ASR + TTS | owns it |
+Measured by us, same box, same harness, same prompts. The 27B figures use the
+**fixed** token-counting harness; the Flash-Next figures are the chunk-counted
+undercounts described above and are pending re-measurement.
 
-The 27B figures are from a matched harness on the same box class, not from this
-run; a fully matched pass is still to do. On measured latency the dense 27B is
-the better daily driver by a wide margin, despite Flash-Next winning every
-vendor-reported quality benchmark. Flash-Next's case is batch throughput and
-benchmark quality, not interactive speed.
+| | Qwen3.8-27B (NVFP4, SGLang, DSpark **v2**) | Flash-Next (NVFP4, vLLM + mmap) |
+|---|---:|---:|
+| single-stream | **18.99** | 11.2* |
+| c=4 | **56.28** | 29.5* |
+| c=8 | **140.42** | 58.1* |
+| tokens/chunk (acceptance) | 2.97–3.20 | — |
+| resident | 56 GB | 79.4 GB |
+| box | leaves room for ASR + TTS + a 3B canary | owns it |
+
+The 27B's c=8 figure cross-validates against SGLang's own server-side counter
+(`gen throughput 139.55 tok/s`) at the same moment, which is the check that the
+fixed harness is now reporting reality.
+
+### The drafter had to match the target
+
+The 27B numbers above are **after** replacing its speculative drafter. We had
+been running DSpark **v1**, which RadixArk trained against the `Qwen3.8-27B-FP8`
+target — while we serve the **NVFP4** target. The mismatch was quiet: no error,
+no warning, just a low acceptance rate you have to go looking for.
+
+| | v1 (mismatched) | v2 (validated on NVFP4) |
+|---|---:|---:|
+| accept length | 1.52–2.15 | **3.03–3.32** |
+| accept rate | 0.07–0.16 | **0.29–0.33** |
+| server gen throughput | 13.5–29.8 tok/s | **24.3–139.6 tok/s** |
+
+RadixArk documents v2 at +26% acceptance over v1 in aggregate; against a
+*mismatched* v1 we measured closer to +55%. **If you run speculative decoding,
+check that your drafter was trained for the quantisation of the target you
+actually serve**, and read the acceptance rate rather than trusting that it
+loaded cleanly.
 
 ## Upstream measurements (not ours)
 

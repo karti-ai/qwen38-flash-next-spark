@@ -1,0 +1,40 @@
+{
+  "base_url": "http://localhost:8001/v1",
+  "model": "brain-qwen38-dspark",
+  "max_tokens": 256,
+  "results": [
+    {
+      "concurrency": 1,
+      "streams_ok": 1,
+      "errors": [],
+      "wall_seconds": 17.5,
+      "total_tokens": 105,
+      "aggregate_tok_s": 6.0,
+      "per_stream_tok_s": 6.0,
+      "ttft_p50": 0.331,
+      "queue_time_delta_s": null
+    },
+    {
+      "concurrency": 4,
+      "streams_ok": 4,
+      "errors": [],
+      "wall_seconds": 19.26,
+      "total_tokens": 454,
+      "aggregate_tok_s": 23.57,
+      "per_stream_tok_s": 5.91,
+      "ttft_p50": 1.183,
+      "queue_time_delta_s": null
+    },
+    {
+      "concurrency": 8,
+      "streams_ok": 8,
+      "errors": [],
+      "wall_seconds": 25.45,
+      "total_tokens": 866,
+      "aggregate_tok_s": 34.03,
+      "per_stream_tok_s": 4.41,
+      "ttft_p50": 1.0,
+      "queue_time_delta_s": null
+    }
+  ]
+}
