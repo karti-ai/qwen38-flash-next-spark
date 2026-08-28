@@ -84,7 +84,7 @@ Each of these costs hours if you meet it cold.
 | **prefix caching** | corrupted output | GB10 GDN kernel bug. Off, upstream, not a preference. |
 | **1M context** | OOM | QSA rejects fp8 KV and bf16 alone needs ~30 GiB per request. 262k native, ~500k with YaRN. |
 
-Full detail in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
+Full detail in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md). Open work is in [`TODO.md`](TODO.md) — the first item is blocking: every throughput number here predates a harness fix and is an undercount.
 
 ---
 
