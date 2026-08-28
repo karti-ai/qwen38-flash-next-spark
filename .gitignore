@@ -1,0 +1,39 @@
+# --- weights & model artifacts (never commit; they are 122 GiB) ---
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+weights/
+models/
+snapshots/
+hf-cache/
+
+# --- run output ---
+logs/
+*.log
+results/raw/
+*.jsonl.tmp
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# --- editors / os ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# --- secrets: nothing host-specific or credentialed ever lands here ---
+*.pem
+*.key
+id_rsa*
+.netrc
+hosts.yml
+secrets.*

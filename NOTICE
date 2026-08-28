@@ -1,0 +1,25 @@
+qwen38-flash-next-spark
+Copyright 2026 Karti Tripathi
+
+This product includes software developed by blazux
+(https://github.com/blazux/qwen3.8-Flash-DGX), licensed under the
+Apache License 2.0. The vendored file
+
+    third_party/qwen38-flash-dgx/vllm_ple_mmap.py
+
+is redistributed UNMODIFIED from that project at commit
+d2854bfff0a0b6f46984b0941ed1db6010031295 (2026-08-27). Its copyright is
+retained by its author. See third_party/qwen38-flash-dgx/LICENSE.
+
+Prior art and measurements referenced in this repository:
+  - blazux/qwen3.8-Flash-DGX        — the PLE mmap patch and the vLLM recipe
+  - jschmied/qwen38-flash-next-gb10 — independent reproduction, the PLE quant
+                                      gate fix, the ptrace/yama finding, and the
+                                      concurrency trace
+  - 0xBakeer/qwen38-flash-next-spark — the prior llama.cpp route
+  - MiaAI-Lab                        — multi-Spark GB10 serving recipes
+
+Model weights are NOT part of this repository. Qwen3.8-Flash-Next is released
+by Alibaba under the qwen-community-1.0 license, which carries an MAU/revenue
+clause. The NVFP4 conversion used here is RadixArk/Qwen3.8-Flash-Next-NVFP4.
+Review both licenses before any production or customer-facing use.
