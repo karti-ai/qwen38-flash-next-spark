@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Shell syntax
+        run: |
+          for f in scripts/*.sh; do bash -n "$f"; echo "  ok  $f"; done
+
+      - name: ShellCheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # SC2086: word splitting is intentional for the $EXTRA passthrough flags.
+          shellcheck -e SC2086 scripts/*.sh
+
+      - name: Python compile
+        run: |
+          python -m compileall -q scripts third_party
+          echo "  ok  python sources compile"
+
+      - name: Ruff
+        run: |
+          pip install -q ruff
+          # third_party/ is vendored verbatim under Apache-2.0 and is not ours to restyle.
+          ruff check scripts/ --select E9,F63,F7,F82,F401,E501 --line-length 100
+
+      - name: Scripts respond to --help without a server
+        run: |
+          python scripts/verify-weights.py --help > /dev/null
+          python scripts/bench.py --help          > /dev/null
+          pip install -q pillow
+          python scripts/vision-test.py --help    > /dev/null
+          echo "  ok  all entry points parse and expose --help"
+
+      - name: No weights, secrets, or host-specific paths committed
+        run: |
+          if git ls-files | grep -EI '\.(safetensors|gguf|bin|pt|pth)$'; then
+            echo "!! model weights must never be committed"; exit 1
+          fi
+          if git grep -nIE '(100\.[0-9]+\.[0-9]+\.[0-9]+|192\.168\.|/home/[a-z]+/(models|lumbridge)|gh[pousr]_|BEGIN [A-Z ]*PRIVATE KEY)' -- . ':!.github/workflows/ci.yml'; then
+            echo "!! host-specific path, private address, or credential-shaped string found"; exit 1
+          fi
+          echo "  ok  nothing host-specific or credentialed is tracked"
