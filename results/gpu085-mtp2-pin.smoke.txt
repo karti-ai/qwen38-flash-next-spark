@@ -1,0 +1,11 @@
+>> http://localhost:8000/v1   (thinking OFF)
+>> serving: qwen3.8-flash-next
+
+  [PASS] arithmetic         437
+  [PASS] arithmetic-2       2352
+  [PASS] reasoning-trap     9
+  [PASS] instruction        acknowledged
+  [PASS] code               ```pythondef fib(n):    if n <= 0:        return 0    a, b = 0, 
+
+all canaries passed.
+next:  python3 scripts/vision-test.py --base-url http://localhost:8000/v1

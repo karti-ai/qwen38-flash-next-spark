@@ -1,0 +1,9 @@
+serving: qwen3.8-flash-next
+
+   c   agg tok/s  per-stream   ttft p50   queue Δs
+----------------------------------------------------
+   1       11.17       11.17        0.7       0.00
+   4       29.46        7.61      1.067       0.00
+   8       58.06        7.33       0.83       0.00
+
+wrote /home/karti/src/qwen38-flash-next-spark/results/gpu072-mtp2-pin.json

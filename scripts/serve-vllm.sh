@@ -113,7 +113,7 @@ docker run -d --name "$NAME" --restart unless-stopped \
     "${SPEC[@]}"
 
 echo ">> $NAME starting on :$PORT  (ctx $CTX · seqs $SEQS · mtp $MTP · yarn $YARN · cpuset ${CPUSET:-all})"
-echo ">> first boot reads ~76 GiB of weights, roughly 8 minutes."
+echo ">> first boot reads ~79 GiB of weights: ~16 min measured cold on a DGX Spark."
 echo ">> follow:  docker logs -f $NAME"
 echo ">> ready when the log says 'Application startup complete', then:"
 echo "     PORT=$PORT scripts/smoke-test.sh"

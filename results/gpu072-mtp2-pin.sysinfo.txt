@@ -1,0 +1,10 @@
+config: gpu072-mtp2-pin
+env: CTX=32768 GPU_MEM=0.72 MTP=2
+boot_seconds: 982
+               total        used        free      shared  buff/cache   available
+Mem:             121          94           0           0          26          26
+VmRSS:	 2637724 kB
+VmSwap:	  678056 kB
+majflt: 114751
+vllm:spec_decode_num_draft_tokens_total{engine="0",model_name="qwen3.8-flash-next"} 2888.0
+vllm:spec_decode_num_accepted_tokens_total{engine="0",model_name="qwen3.8-flash-next"} 1955.0

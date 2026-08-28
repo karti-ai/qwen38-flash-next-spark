@@ -43,7 +43,7 @@ DEST=$PWD/weights/Qwen3.8-Flash-Next-NVFP4 scripts/download-weights.sh
 # 2. Build the patched vLLM image (official image + one vendored patch, ~1 min)
 docker build -t qwen38-flash-next-spark .
 
-# 3. Serve. First boot reads ~76 GiB of weights — about 8 minutes.
+# 3. Serve. First boot reads ~79 GiB of weights — about 16 minutes, measured.
 WEIGHTS=$PWD/weights/Qwen3.8-Flash-Next-NVFP4 scripts/serve-vllm.sh
 
 # 4. Prove it works
