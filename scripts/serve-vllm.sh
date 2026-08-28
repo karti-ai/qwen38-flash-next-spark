@@ -7,12 +7,26 @@
 #   PORT=8000       host port
 #   CTX=262144      max model len. Native is 262144; YARN=1 reaches ~500k.
 #   SEQS=8          --max-num-seqs. READ THE WARNING BELOW BEFORE LOWERING THIS.
-#   GPU_MEM=0.85    fraction of the unified pool for weights+KV.
+#   GPU_MEM=0.85    fraction of the unified pool for weights AND KV together.
 #                   0.875 was OOM-killed on a 300k prefill with MTP. Keep margin.
+#                   ⚠️ HARD FLOOR: the weights are ~79.4 GiB of 121.7 = 0.653, so
+#                   anything at or below ~0.66 yields a NEGATIVE KV cache and dies
+#                   at boot with "Available KV cache memory: -6.78 GiB". Do not
+#                   go under 0.70.
+#                   ⚠️ Lowering CTX does NOT free memory for the page cache that
+#                   the n-gram table pages through — CTX caps how long one request
+#                   may be, while the KV pool is sized by GPU_MEM alone. GPU_MEM is
+#                   the only knob that trades KV against page cache.
 #   MTP=2           speculative tokens from the model's own MTP head (0 = off).
 #   KV_DTYPE=auto   KEEP auto (= bf16). The QSA layers REFUSE fp8 KV.
 #   PREWARM=0       1 = stream the 48 GiB table once at boot to warm the page cache.
 #   WORKERS=32      mmap gather threads.
+#   CPUSET=5-9,15-19  CPU cores for the container. GB10 is big.LITTLE and this
+#                   MATTERS: cpu0-4/10-14 are Cortex-A725 at 2.81 GHz, cpu5-9/15-19
+#                   are Cortex-X925 at 3.90 GHz. The PLE gather is real CPU work on
+#                   the token path, so letting it land on the efficiency cluster
+#                   costs you clock on the exact thing that bounds single-stream
+#                   decode. Set CPUSET= (empty) to let the scheduler decide.
 #   YARN=0          1 = enable YaRN rope scaling past the native context.
 #   EXTRA=          extra vllm flags, passed verbatim.
 #
@@ -36,6 +50,7 @@ MTP="${MTP:-2}"
 KV_DTYPE="${KV_DTYPE:-auto}"
 PREWARM="${PREWARM:-0}"
 WORKERS="${WORKERS:-32}"
+CPUSET="${CPUSET-5-9,15-19}"
 YARN="${YARN:-0}"
 EXTRA="${EXTRA:-}"
 
@@ -69,9 +84,13 @@ if [ "$MTP" != 0 ]; then
   fi
 fi
 
+PIN=()
+[ -n "$CPUSET" ] && PIN=(--cpuset-cpus "$CPUSET")
+
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 docker run -d --name "$NAME" --restart unless-stopped \
   --gpus all --ipc=host --shm-size 16g -p "${PORT}:8000" \
+  "${PIN[@]}" \
   -v "$WEIGHTS:/model:ro" \
   -e VLLM_PLE_MMAP=1 \
   -e VLLM_PLE_MMAP_WORKERS="$WORKERS" \
@@ -93,7 +112,7 @@ docker run -d --name "$NAME" --restart unless-stopped \
     --reasoning-parser qwen3 \
     "${SPEC[@]}"
 
-echo ">> $NAME starting on :$PORT  (ctx $CTX · seqs $SEQS · mtp $MTP · yarn $YARN)"
+echo ">> $NAME starting on :$PORT  (ctx $CTX · seqs $SEQS · mtp $MTP · yarn $YARN · cpuset ${CPUSET:-all})"
 echo ">> first boot reads ~76 GiB of weights, roughly 8 minutes."
 echo ">> follow:  docker logs -f $NAME"
 echo ">> ready when the log says 'Application startup complete', then:"
