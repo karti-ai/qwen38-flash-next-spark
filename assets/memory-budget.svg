@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 430" width="880" height="430" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <style>
+    .title  { font-size: 19px; font-weight: 700; fill: #e6edf3; }
+    .sub    { font-size: 13px; fill: #8b949e; }
+    .label  { font-size: 13px; font-weight: 600; fill: #e6edf3; }
+    .small  { font-size: 12px; fill: #c9d1d9; }
+    .tiny   { font-size: 11px; fill: #8b949e; }
+    .verdict-bad  { font-size: 14px; font-weight: 700; fill: #f85149; }
+    .verdict-good { font-size: 14px; font-weight: 700; fill: #3fb950; }
+    .limit  { stroke: #f85149; stroke-width: 2; stroke-dasharray: 6 4; }
+    .limitlabel { font-size: 11px; font-weight: 600; fill: #f85149; }
+  </style>
+
+  <rect width="880" height="430" fill="#0d1117"/>
+
+  <text class="title" x="32" y="40">Qwen3.8-Flash-Next on one DGX Spark</text>
+  <text class="sub"   x="32" y="62">121.7 GiB unified memory, shared between host and GPU. There is no second pool to spill into.</text>
+
+  <!-- shared scale: 1 GiB = 2.55 px, bars start at y=110, width baseline x=60 -->
+  <!-- LEFT: resident -->
+  <text class="label" x="60"  y="100">Everything resident</text>
+  <text class="label" x="480" y="100">n-gram table served from NVMe</text>
+
+  <!-- limit line -->
+  <line class="limit" x1="48" y1="122" x2="392" y2="122"/>
+  <line class="limit" x1="468" y1="122" x2="812" y2="122"/>
+  <text class="limitlabel" x="48"  y="117">121.7 GiB limit</text>
+  <text class="limitlabel" x="468" y="117">121.7 GiB limit</text>
+
+  <!-- LEFT stack: body 78, ngram 44 -> 122 total, overflows -->
+  <!-- drawn bottom-up from y=370; 1 GiB = 2.0 px -->
+  <rect x="60" y="214" width="150" height="156" fill="#1f6feb" rx="3"/>
+  <text class="small" x="72" y="298">body</text>
+  <text class="tiny"  x="72" y="316">~78 GiB NVFP4</text>
+
+  <rect x="60" y="126" width="150" height="88" fill="#8957e5" rx="3"/>
+  <text class="small" x="72" y="166">n-gram table</text>
+  <text class="tiny"  x="72" y="184">~44 GiB FP8</text>
+
+  <rect x="60" y="118" width="150" height="8" fill="#f85149" rx="2"/>
+
+  <text class="verdict-bad" x="228" y="180">✗ 122 GiB</text>
+  <text class="tiny"        x="228" y="200">over the limit before</text>
+  <text class="tiny"        x="228" y="216">a single KV token</text>
+
+  <!-- RIGHT stack: body 78, KV 31 -> 107, fits -->
+  <rect x="480" y="214" width="150" height="156" fill="#1f6feb" rx="3"/>
+  <text class="small" x="492" y="298">body</text>
+  <text class="tiny"  x="492" y="316">~78 GiB NVFP4</text>
+
+  <rect x="480" y="152" width="150" height="62" fill="#238636" rx="3"/>
+  <text class="small" x="492" y="180">KV cache</text>
+  <text class="tiny"  x="492" y="198">~31 GiB</text>
+
+  <rect x="480" y="126" width="150" height="26" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="4 3" rx="3"/>
+  <text class="tiny" x="492" y="143">~14 GiB headroom</text>
+
+  <text class="verdict-good" x="648" y="180">✓ 107 GiB</text>
+  <text class="tiny"         x="648" y="200">76.6 resident + 31.0 KV,</text>
+  <text class="tiny"         x="648" y="216">measured on a GB10</text>
+
+  <!-- the paged table, below the line -->
+  <rect x="480" y="386" width="150" height="26" fill="#8957e5" fill-opacity="0.28" stroke="#8957e5" stroke-dasharray="4 3" rx="3"/>
+  <text class="tiny" x="492" y="403">n-gram table → NVMe</text>
+  <path d="M555 370 L555 386" stroke="#8957e5" stroke-width="1.5" marker-end="url(#a)"/>
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="#8957e5"/>
+    </marker>
+  </defs>
+
+  <text class="tiny" x="648" y="398">a token touches 16 rows × 160 B</text>
+  <text class="tiny" x="648" y="414">— ~2.5 KB of 44 GiB</text>
+
+  <line x1="436" y1="88" x2="436" y2="420" stroke="#21262d" stroke-width="1"/>
+</svg>

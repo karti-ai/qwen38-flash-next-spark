@@ -23,18 +23,9 @@ A DGX Spark has **121.7 GiB of unified memory shared between host and GPU**. The
 
 **The trick:** a token only ever touches **16 rows × 160 bytes** of that 44 GiB table. So the table does not need to be resident — it can live on NVMe and be served through the page cache. That is exactly what llama.cpp does with GGUF mmap, and what [blazux/qwen3.8-Flash-DGX](https://github.com/blazux/qwen3.8-Flash-DGX) does to vLLM in one patched file.
 
-```
-        WITHOUT the patch                    WITH the PLE served from NVMe
-   ┌──────────────────────────┐          ┌──────────────────────────┐
-   │ body        ~78 GiB      │          │ body        ~78 GiB      │
-   ├──────────────────────────┤          ├──────────────────────────┤
-   │ n-gram      ~44 GiB      │          │ KV cache    ~31 GiB      │
-   ├──────────────────────────┤          ├──────────────────────────┤
-   │ KV cache      0 GiB  ✗   │          │ headroom              ~13│
-   └──────────────────────────┘          └──────────────────────────┘
-        122 GiB > 121.7 — dead                ~107 GiB resident — serves
-                                          n-gram table paged from NVMe ↓
-```
+<p align="center">
+  <img src="assets/memory-budget.svg" alt="Memory budget: resident vs n-gram table served from NVMe" width="880">
+</p>
 
 The counter-intuitive result: the paging **gets cheaper under load**. Major faults per token fall ~4.4× from 1 to 48 concurrent streams, because batched tokens share n-gram rows and the page cache keeps the hot set. This is an argument *for* running the model concurrent, not a caution against it.
 
