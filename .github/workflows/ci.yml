@@ -49,7 +49,7 @@ jobs:
           if git ls-files | grep -EI '\.(safetensors|gguf|bin|pt|pth)$'; then
             echo "!! model weights must never be committed"; exit 1
           fi
-          if git grep -nIE '(100\.[0-9]+\.[0-9]+\.[0-9]+|192\.168\.|/home/[a-z]+/(models|lumbridge)|gh[pousr]_|BEGIN [A-Z ]*PRIVATE KEY)' -- . ':!.github/workflows/ci.yml'; then
-            echo "!! host-specific path, private address, or credential-shaped string found"; exit 1
+          if git grep -nIE '(100\.[0-9]+\.[0-9]+\.[0-9]+|192\.168\.[0-9]+|10\.0\.[0-9]+\.[0-9]+|/home/[a-z][a-z0-9_-]*/|/Users/[a-z][a-z0-9_-]*/|gh[pousr]_[A-Za-z0-9]|sk-[A-Za-z0-9]{16}|AKIA[0-9A-Z]{12}|BEGIN [A-Z ]*PRIVATE KEY)' -- . ':!.github/workflows/ci.yml'; then
+            echo "!! host-specific path, private address, or credential-shaped string found"; echo "   (any /home/<user>/ or /Users/<user>/ path counts — scrub it, do not widen this guard)"; exit 1
           fi
           echo "  ok  nothing host-specific or credentialed is tracked"

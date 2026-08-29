@@ -6,4 +6,4 @@ serving: qwen3.8-flash-next
    4       29.46        7.61      1.067       0.00
    8       58.06        7.33       0.83       0.00
 
-wrote /home/karti/src/qwen38-flash-next-spark/results/gpu072-mtp2-pin.json
+wrote results/gpu072-mtp2-pin.json
